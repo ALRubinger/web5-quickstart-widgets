@@ -62,7 +62,11 @@
     <section id="did-create">
       <h1>Create a Decentralized Identifier (DID)</h1>
       <div class="input">
-        <pre><code>const did = await web5.did.create('ion');</code></pre>
+        <pre><code>
+          let web5;
+          let myDid;
+          ({ web5, did: myDid } = await Web5.connect());
+          </code></pre>
         <button>Run!</button>
       </div>
       <div class="output">
@@ -74,35 +78,16 @@
         </details>
       </div>
     </section>
-    <section id="did-register">
-      <h1>Store DID</h1>
-      <div class="input">
-        <pre><code>
-          await web5.did.manager.set(did.id, {
-            connected: true,
-            endpoint: 'app://dwn',
-            keys: {
-              ['#dwn']: {
-                keyPair: did.keys.find(key => key.id === 'dwn').keyPair,
-              },
-            },
-          });
-  </code></pre>
-    <button disabled>Run!</button>
-    </div>
-      <div class="output"></div>
-    </section>
     <section id="dwn-write">
       <h1>Write some data</h1>
       <div class="input">
         <pre><code>
-        const {record} = await web5.dwn.records.write(did.id, {
-          author: did.id,
-          data: "Hello Web5",
-          message: {
-            dataFormat: 'text/plain',
-          },
-        });
+          let result = await web5.dwn.records.create({
+            data,
+            message: {
+              dataFormat: 'text/plain',
+            },
+          });
         </code></pre>
         <input type="text" placeholder="Enter text" disabled>
         <button disabled>Run!</button>
@@ -110,7 +95,9 @@
       </div>
       <div class="output">
         <details>
-          <summary>...</summary>
+          <summary>
+            <code>...</code>
+          </summary>
           <textarea readonly></textarea>
         </details>
       </div>
@@ -161,49 +148,39 @@
   /* ========================== */
   /* ========== Web5 ========== */
   
-  import { Web5 } from 'https://cdn.jsdelivr.net/npm/@tbd54566975/web5@0.6.0/dist/browser.mjs';
+  import { Web5 } from 'https://cdn.jsdelivr.net/npm/@tbd54566975/web5@0.7.0/dist/browser.mjs';
   
-  let web5 = new Web5;
+  let web5;
+  let myDid;
+  let record;
   
   async function didCreate() {
-    let did = await web5.did.create('ion');
-    return did;
+    ({ web5, did: myDid } = await Web5.connect());
+    return myDid;
   };
   
-  async function didRegister(did) {
-    await web5.did.manager.set(did.id, {
-      connected: true,
-      endpoint: 'app://dwn',
-      keys: {
-        ['#dwn']: {
-          keyPair: did.keys.find(key => key.id === 'dwn').keyPair,
-        },
-      },
-    });
-  };
-  
-  async function dwnWriteTextRecord(did, data) {
-    let result = await web5.dwn.records.write(did.id, {
-      author: did.id,
-      data,
+  async function dwnWriteTextRecord(inputText) {
+    ({ record } = await web5.dwn.records.create({
+      data: inputText,
       message: {
         dataFormat: 'text/plain',
       },
-    });
-    return result;
+    }));
+    return record;
   }
   
-  async function dwnUpdateDataFromRecordWithId(record, data) {
+  async function dwnUpdateDataFromRecordWithId(data) {
     await record.update({data});
     return await record.data.text();
   }
   
-  async function dwnReadDataFromRecordWithId(record) {
+  async function dwnReadDataFromRecordWithId() {
     return await record.data.text();
   }
   
-  async function dwnDeleteRecordWithId(record) {
-    return await record.delete();
+  async function dwnDeleteRecordWithId() {
+    await record.delete();
+    record = null;
   }
   
   /* ========== Web5 ========== */
@@ -215,18 +192,12 @@
   let didCreateInputButton = document.querySelector('#did-create .input button');
   let didCreateOutputSummaryCode = document.querySelector('#did-create .output details summary code');
   let didCreateOutputDetailsTextarea = document.querySelector('#did-create .output details textarea');
-  let did = null;
-  
-  let didRegisterInputButton = document.querySelector('#did-register .input button');
-  let didRegisterOutput = document.querySelector('#did-register .output');
-  let registered = false;
   
   let dwnWriteInputFile = document.querySelector('#dwn-write .input input[type="text"]');
   let dwnWriteInputButton = document.querySelector('#dwn-write .input button');
   let dwnWriteInputProgress = document.querySelector('#dwn-write .input progress');
-  let dwnWriteOutputSummary = document.querySelector('#dwn-write .output details summary');
+  let dwnWriteOutputSummary = document.querySelector('#dwn-write .output details summary code');
   let dwnWriteOutputDetailsTextarea = document.querySelector('#dwn-write .output details textarea');
-  let writeResult = null;
   
   let dwnReadInputButton = document.querySelector('#dwn-read .input button');
   let dwnReadInputProgress = document.querySelector('#dwn-read .input progress');
@@ -241,44 +212,43 @@
   let dwnDeleteInputProgress = document.querySelector('#dwn-delete .input progress');
   let dwnDeleteOutputSummary = document.querySelector('#dwn-delete .output details summary');
   let dwnDeleteOutputDetailsTextarea = document.querySelector('#dwn-delete .output details textarea');
-  let deleteResult = null;
+  let registered = false;
   
   function update() {
-    if (!did) {
+
+    if (!myDid) {
       registered = false;
     }
   
     if (!registered) {
-      writeResult = null
+      record = null;
     }
   
     if (document.activeElement !== didCreateOutputDetailsTextarea) {
-      didCreateOutputSummaryCode.innerHTML = did?.internalId;
-      didCreateOutputDetailsTextarea.value = did ? JSON.stringify(did, null, 2) : '';
+      didCreateOutputSummaryCode.innerHTML = myDid ? "&#x2714; Created!" : "Error";
+      didCreateOutputDetailsTextarea.value = myDid ? JSON.stringify(myDid, null, 2) : '';
     }
-  
-    didRegisterInputButton.disabled = !did || registered;
-    didRegisterOutput.innerHTML = registered ? '&#x2714; Registered!' : '';
+
+    let noRecord = !record;
   
     dwnWriteInputFile.disabled = !registered;
     dwnWriteInputButton.disabled = !registered || !dwnWriteInputFile.value
-    dwnWriteOutputSummary.innerHTML = writeResult ? '&#x2714; Written!' : '...';
-    dwnWriteOutputDetailsTextarea.value = writeResult ? JSON.stringify(writeResult, null, 2) : '';
-  
-    dwnReadInputButton.disabled = !writeResult || deleteResult;
+    dwnWriteOutputSummary.innerHTML = !noRecord ? '&#x2714; Written!' : '...';
+    dwnWriteOutputDetailsTextarea.value = !noRecord ? record : '';
 
-    dwnUpdateInputFile.disabled = !writeResult || deleteResult;
-    dwnUpdateInputButton.disabled = !writeResult || !dwnUpdateInputFile.value || deleteResult;
+    dwnReadInputButton.disabled = noRecord;
+
+    dwnUpdateInputFile.disabled = noRecord;
+    dwnUpdateInputButton.disabled = noRecord || !dwnUpdateInputFile.value;
   
-    dwnDeleteInputButton.disabled = deleteResult;
-    dwnDeleteOutputSummary.innerHTML = deleteResult ? `&#x2714; Deleted!` : '...';
-    dwnDeleteOutputDetailsTextarea.value = deleteResult ? JSON.stringify(deleteResult, null, 2) : '';
+    dwnDeleteInputButton.disabled = noRecord;
+    dwnDeleteOutputSummary.innerHTML = noRecord ? `&#x2714; Deleted!` : '...';
+    dwnDeleteOutputDetailsTextarea.value = noRecord ? JSON.stringify(record, null, 2) : '';
   }
   
   didCreateInputButton.addEventListener('click', async () => {
-    did = await didCreate();
-  
-    registered = false;
+    myDid = await didCreate();
+    registered = true;
     update();
   });
   didCreateOutputDetailsTextarea.addEventListener('input', () => {
@@ -291,33 +261,21 @@
     registered = false;
     update();
   });
-  
-  didRegisterInputButton.addEventListener('click', async () => {
-    await didRegister(did);
-    registered = true;
-  
-    update();
-  });
 
   dwnWriteInputFile.addEventListener('input', () => {
-      writeResult = null;
-      update();
+    update();
   });
 
   dwnWriteInputButton.addEventListener('click', async () => {
     dwnWriteInputButton.disabled = true;
     dwnWriteInputProgress.style.visibility = 'visible';
     dwnWriteOutputSummary.innerHTML = '...';
-    dwnWriteOutputDetailsTextarea.value = '';
+    await dwnWriteTextRecord(dwnWriteInputFile.value);
+    dwnWriteOutputDetailsTextarea.value = "ALR WHAT";
+    dwnWriteInputButton.disabled = false;
+    dwnWriteInputProgress.style.visibility = 'hidden';
   
-      const { record } = await dwnWriteTextRecord(did, dwnWriteInputFile.value);
-      writeResult = null;
-      writeResult = record;
-
-      dwnWriteInputButton.disabled = false;
-      dwnWriteInputProgress.style.visibility = 'hidden';
-  
-      update();
+    update();
   });
   
   dwnReadInputButton.addEventListener('click', async () => {
@@ -325,7 +283,7 @@
     dwnReadInputProgress.style.visibility = 'visible';
 
     dwnReadOutput.innerHTML = '';
-    dwnReadOutput.innerHTML = await dwnReadDataFromRecordWithId(writeResult);
+    dwnReadOutput.innerHTML = await dwnReadDataFromRecordWithId();
 
     dwnReadInputButton.disabled = false;
     dwnReadInputProgress.style.visibility = 'hidden';
@@ -333,15 +291,15 @@
   });
 
   dwnUpdateInputFile.addEventListener('input', () => {
-      update();
+    update();
   });
 
   dwnUpdateInputButton.addEventListener('click', async () => {
     dwnUpdateInputButton.disabled = true;
     dwnUpdateInputProgress.style.visibility = 'visible';
     dwnUpdateOutput.innerHTML = '';
-    dwnUpdateOutput.innerHTML = await dwnUpdateDataFromRecordWithId(writeResult, dwnUpdateInputFile.value);
-    
+    let updateValue = dwnUpdateInputFile.value;
+    dwnUpdateOutput.innerHTML = await dwnUpdateDataFromRecordWithId(updateValue);
     dwnUpdateInputButton.disabled = false;
     dwnUpdateInputProgress.style.visibility = 'hidden';
     update();
@@ -352,9 +310,7 @@
     dwnDeleteInputProgress.style.visibility = 'visible';
     dwnDeleteOutputSummary.innerHTML = '...';
     dwnDeleteOutputDetailsTextarea.value = '';
-  
-    deleteResult = null;
-    deleteResult = await dwnDeleteRecordWithId(writeResult);
+    await dwnDeleteRecordWithId();
     dwnDeleteInputProgress.style.visibility = 'hidden';
   
     update();
